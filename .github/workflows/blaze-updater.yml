@@ -23,7 +23,7 @@ jobs:
           node -e "
             const fs = require('fs').promises;
             const path = require('path');
-
+            
             const HISTORY_FILE_PATH = path.join(__dirname, 'history.json');
             const BLAZE_API_URL = 'https://blaze.com/api/roulette_games/recent'; 
             const HISTORY_MAX_LENGTH = 480;
@@ -32,57 +32,54 @@ jobs:
               try {
                 console.log('Buscando dados da API da Blaze...');
                 const response = await fetch(BLAZE_API_URL);
+
                 if (!response.ok) {
-                  throw new Error(`Falha na API: Status ${response.status}`);
+                  // Mensagem de erro sem caracteres problemáticos
+                  console.error('Falha na API: Status ' + response.status);
+                  process.exit(1);
                 }
+                
                 const apiData = await response.json();
 
                 if (!apiData || !Array.isArray(apiData) || apiData.length === 0) {
-                  throw new Error('Resposta da API inválida ou vazia.');
+                  throw new Error('Resposta da API invalida ou vazia.');
                 }
                 
-                const lastApiRollId = apiData[apiData.length - 1].id;
-
                 let history = [];
-                let lastKnownId = null;
-
                 try {
                   const historyFileContent = await fs.readFile(HISTORY_FILE_PATH, 'utf8');
-                  // Simplificando: vamos assumir que o arquivo SÓ tem o array
                   const savedHistory = JSON.parse(historyFileContent);
                   if (Array.isArray(savedHistory)) {
                       history = savedHistory;
                   }
                 } catch (e) {
-                  console.log('Arquivo de histórico não encontrado, será criado um novo.');
+                  console.log('Arquivo de historico nao encontrado. Sera criado um novo.');
                 }
-                
-                // Verifica se o último número da API já está no nosso histórico para evitar duplicação.
-                // Isso é uma forma de saber se já atualizamos
-                const lastApiRollNumber = apiData[apiData.length-1].roll;
-                if (history.length > 0 && history[history.length - 1] === lastApiRollNumber && apiData.length === history.length) {
-                    console.log('Nenhum resultado novo detectado. O histórico já está sincronizado.');
+
+                const newHistory = apiData
+                  .filter(roll => roll.roll !== 0) // Filtra os brancos
+                  .map(roll => roll.roll) // Pega apenas os números
+                  .slice(-HISTORY_MAX_LENGTH); // Limita ao máximo de 480
+
+                // Compara as strings JSON para ver se houve mudança
+                if (JSON.stringify(history) === JSON.stringify(newHistory)) {
+                    console.log('Nenhum resultado novo detectado. Finalizando.');
                     return process.stdout.write('::set-output name=updated::false\n');
                 }
 
-                console.log('Novos resultados encontrados! Atualizando histórico...');
-                
-                // Pega todos os números válidos (sem o branco) da API
-                const allValidRolls = apiData.filter(roll => roll.roll !== 0).map(roll => roll.roll);
-                
-                // Garante que o histórico final tenha no máximo o tamanho definido
-                const newHistory = allValidRolls.slice(-HISTORY_MAX_LENGTH);
-
+                console.log('Novos resultados encontrados! Atualizando historico...');
                 await fs.writeFile(HISTORY_FILE_PATH, JSON.stringify(newHistory, null, 2), 'utf8');
-                console.log(`Histórico atualizado. Total de ${newHistory.length} rodadas.`);
+                
+                // Mensagem de sucesso sem caracteres problemáticos
+                console.log('Historico atualizado. Total de ' + newHistory.length + ' rodadas.');
                 return process.stdout.write('::set-output name=updated::true\n');
 
               } catch (error) {
-                console.error('Erro durante a execução do script:', error);
+                console.error('Erro durante a execucao do script:', error);
                 process.exit(1);
               }
             }
-
+            
             run();
           "
 
