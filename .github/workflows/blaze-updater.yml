@@ -1,4 +1,7 @@
-name: Atualizador de Dados do Double
+# CÓDIGO PARA TENTAR NOVAMENTE COM GITHUB ACTIONS
+# Arquivo: .github/workflows/blaze-updater.yml
+
+name: Atualizador de Dados do Double (URL Correta)
 
 on:
   schedule:
@@ -25,69 +28,54 @@ jobs:
             const path = require('path');
             
             const HISTORY_FILE_PATH = path.join(__dirname, 'history.json');
-            // VVVV ESTA É A MUDANÇA PRINCIPAL VVVV
-            // Usamos um proxy CORS gratuito para rotear o pedido
-            const BLAZE_API_URL = 'https://proxy.cors.sh/https://blaze.com/api/roulette_games/recent'; 
+            // VVVV USANDO A URL CORRETA VVVV
+            const BLAZE_API_URL = 'https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/history/1';
             const HISTORY_MAX_LENGTH = 480;
 
             async function run() {
               try {
-                console.log('Buscando dados da API da Blaze via Proxy...');
-
-                // VVVV Adicionamos um cabeçalho para o proxy CORS.SH VVVV
+                console.log('Buscando dados da API da Blaze com a URL correta...');
                 const response = await fetch(BLAZE_API_URL, {
-                  headers: {
-                    'x-cors-api-key': 'temp_1a2b3c4d5e6f7g8h9i0j' // Chave temporária para o proxy
-                  }
+                  headers: { 'User-Agent': 'Mozilla/5.0' } // Mantemos um User-Agent para garantir
                 });
-                
+
                 if (!response.ok) {
-                  console.error('Falha na API: Status ' + response.status);
-                  process.exit(1);
+                  throw new Error('Falha na API: Status ' + response.status);
                 }
-                
                 const apiData = await response.json();
 
-                if (!apiData || !Array.isArray(apiData) || apiData.length === 0) {
+                if (!apiData || !apiData.history || !Array.isArray(apiData.history)) {
                   throw new Error('Resposta da API invalida ou vazia.');
                 }
                 
-                let history = [];
+                let currentHistory = [];
                 try {
                   const historyFileContent = await fs.readFile(HISTORY_FILE_PATH, 'utf8');
-                  const savedHistory = JSON.parse(historyFileContent);
-                  if (Array.isArray(savedHistory)) {
-                      history = savedHistory;
-                  }
-                } catch (e) {
-                  console.log('Arquivo de historico nao encontrado. Sera criado um novo.');
-                }
+                  currentHistory = JSON.parse(historyFileContent);
+                } catch (e) { /* Arquivo não existe ainda, ok */ }
 
-                const newHistory = apiData
-                  .filter(roll => roll.roll !== 0)
+                const newHistory = apiData.history
                   .map(roll => roll.roll)
-                  .slice(-HISTORY_MAX_LENGTH);
+                  .filter(roll => roll !== 0)
+                  .slice(0, HISTORY_MAX_LENGTH)
+                  .reverse();
 
-                if (JSON.stringify(history) === JSON.stringify(newHistory)) {
-                    console.log('Nenhum resultado novo detectado. Finalizando.');
+                if (JSON.stringify(currentHistory) === JSON.stringify(newHistory)) {
+                    console.log('Nenhum resultado novo detectado.');
                     return process.stdout.write('::set-output name=updated::false\n');
                 }
 
-                console.log('Novos resultados encontrados! Atualizando historico...');
                 await fs.writeFile(HISTORY_FILE_PATH, JSON.stringify(newHistory, null, 2), 'utf8');
-                
-                console.log('Historico atualizado. Total de ' + newHistory.length + ' rodadas.');
+                console.log('Historico atualizado com sucesso. Total: ' + newHistory.length);
                 return process.stdout.write('::set-output name=updated::true\n');
 
               } catch (error) {
-                console.error('Erro durante a execucao do script:', error);
+                console.error('Erro durante a execucao:', error);
                 process.exit(1);
               }
             }
-            
             run();
           "
-
       - name: Commit e Push das mudanças
         if: steps.update_script.outputs.updated == 'true'
         run: |
