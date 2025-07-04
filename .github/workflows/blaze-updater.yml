@@ -31,10 +31,16 @@ jobs:
             async function run() {
               try {
                 console.log('Buscando dados da API da Blaze...');
-                const response = await fetch(BLAZE_API_URL);
+
+                // VVVV A MUDANÇA ESTÁ AQUI VVVV
+                const response = await fetch(BLAZE_API_URL, {
+                  headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                  }
+                });
+                // ^^^^ A MUDANÇA ESTÁ AQUI ^^^^
 
                 if (!response.ok) {
-                  // Mensagem de erro sem caracteres problemáticos
                   console.error('Falha na API: Status ' + response.status);
                   process.exit(1);
                 }
@@ -57,11 +63,10 @@ jobs:
                 }
 
                 const newHistory = apiData
-                  .filter(roll => roll.roll !== 0) // Filtra os brancos
-                  .map(roll => roll.roll) // Pega apenas os números
-                  .slice(-HISTORY_MAX_LENGTH); // Limita ao máximo de 480
+                  .filter(roll => roll.roll !== 0)
+                  .map(roll => roll.roll)
+                  .slice(-HISTORY_MAX_LENGTH);
 
-                // Compara as strings JSON para ver se houve mudança
                 if (JSON.stringify(history) === JSON.stringify(newHistory)) {
                     console.log('Nenhum resultado novo detectado. Finalizando.');
                     return process.stdout.write('::set-output name=updated::false\n');
@@ -70,7 +75,6 @@ jobs:
                 console.log('Novos resultados encontrados! Atualizando historico...');
                 await fs.writeFile(HISTORY_FILE_PATH, JSON.stringify(newHistory, null, 2), 'utf8');
                 
-                // Mensagem de sucesso sem caracteres problemáticos
                 console.log('Historico atualizado. Total de ' + newHistory.length + ' rodadas.');
                 return process.stdout.write('::set-output name=updated::true\n');
 
