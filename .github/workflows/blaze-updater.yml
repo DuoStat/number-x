@@ -25,21 +25,22 @@ jobs:
             const path = require('path');
             
             const HISTORY_FILE_PATH = path.join(__dirname, 'history.json');
-            const BLAZE_API_URL = 'https://blaze.com/api/roulette_games/recent'; 
+            // VVVV ESTA É A MUDANÇA PRINCIPAL VVVV
+            // Usamos um proxy CORS gratuito para rotear o pedido
+            const BLAZE_API_URL = 'https://proxy.cors.sh/https://blaze.com/api/roulette_games/recent'; 
             const HISTORY_MAX_LENGTH = 480;
 
             async function run() {
               try {
-                console.log('Buscando dados da API da Blaze...');
+                console.log('Buscando dados da API da Blaze via Proxy...');
 
-                // VVVV A MUDANÇA ESTÁ AQUI VVVV
+                // VVVV Adicionamos um cabeçalho para o proxy CORS.SH VVVV
                 const response = await fetch(BLAZE_API_URL, {
                   headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                    'x-cors-api-key': 'temp_1a2b3c4d5e6f7g8h9i0j' // Chave temporária para o proxy
                   }
                 });
-                // ^^^^ A MUDANÇA ESTÁ AQUI ^^^^
-
+                
                 if (!response.ok) {
                   console.error('Falha na API: Status ' + response.status);
                   process.exit(1);
