@@ -1,29 +1,23 @@
 name: Atualizador de Dados do Double
 
-# gatilhos que fazem o robô rodar
 on:
-  # 1. Automaticamente a cada 5 minutos
   schedule:
     - cron: '*/5 * * * *'
-  # 2. Permite rodar manualmente na aba "Actions" do GitHub
   workflow_dispatch:
 
 jobs:
   update-data:
     runs-on: ubuntu-latest
     steps:
-      # Pega uma cópia do seu repositório para o robô poder trabalhar
-      - name: Checkout do Repositório
+      - name: Checkout Repository
         uses: actions/checkout@v3
 
-      # Configura o ambiente Node.js para que possamos usar JavaScript
-      - name: Setup do Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18' # Versão estável do Node
+          node-version: '18'
 
-      # Roda o script que busca e processa os dados
-      - name: Busca API da Blaze e Atualiza Histórico
+      - name: Fetch API and Update History
         id: update_script
         run: |
           node -e "
@@ -38,11 +32,13 @@ jobs:
               try {
                 console.log('Buscando dados da API da Blaze...');
                 const response = await fetch(BLAZE_API_URL);
-                if (!response.ok) throw new Error(`Falha na API: ${response.statusText}`);
+                if (!response.ok) {
+                  throw new Error(`Falha na API: Status ${response.status}`);
+                }
                 const apiData = await response.json();
 
                 if (!apiData || !Array.isArray(apiData) || apiData.length === 0) {
-                  throw new Error('Resposta da API da Blaze inválida ou vazia.');
+                  throw new Error('Resposta da API inválida ou vazia.');
                 }
                 
                 const lastApiRollId = apiData[apiData.length - 1].id;
@@ -51,34 +47,29 @@ jobs:
 
                 try {
                   const historyFileContent = await fs.readFile(HISTORY_FILE_PATH, 'utf8');
-                  currentData = JSON.parse(historyFileContent);
-                  if (!Array.isArray(currentData.history)) currentData.history = [];
+                  // O arquivo history.json só terá o array, então tratamos assim
+                  const savedHistory = JSON.parse(historyFileContent);
+                  if (Array.isArray(savedHistory)) {
+                      currentData.history = savedHistory;
+                  }
                 } catch (e) {
-                  console.log('Arquivo de histórico não encontrado, será criado um novo.');
+                  console.log('Arquivo de histórico não encontrado ou inválido. Será criado um novo.');
                 }
 
-                if (lastApiRollId === currentData.lastId) {
-                  console.log('Nenhum resultado novo encontrado. Finalizando.');
-                  process.stdout.write('::set-output name=updated::false\n');
-                  return;
+                // Lógica simplificada: Se o último número do histórico salvo for igual ao último da API, não faz nada
+                const lastApiRollNumber = apiData[apiData.length - 1].roll;
+                if (currentData.history.length > 0 && currentData.history[currentData.history.length - 1] === lastApiRollNumber) {
+                     console.log('Nenhum resultado novo detectado. Finalizando.');
+                     return process.stdout.write('::set-output name=updated::false\n');
                 }
 
-                console.log('Novos resultados encontrados! Atualizando histórico...');
-                // Filtra os brancos (número 0) e pega apenas os números
+                console.log('Novos resultados encontrados! Atualizando...');
                 const allValidRolls = apiData.filter(roll => roll.roll !== 0).map(roll => roll.roll);
-                
-                // Pega os últimos X resultados da API para garantir que nosso histórico esteja sempre fresco
                 const newHistory = allValidRolls.slice(-HISTORY_MAX_LENGTH);
 
-                const dataToSave = {
-                  lastId: lastApiRollId,
-                  history: newHistory
-                };
-                
-                // Salva o objeto completo no arquivo, para ter o controle do último ID
-                await fs.writeFile(HISTORY_FILE_PATH, JSON.stringify(dataToSave, null, 2), 'utf8');
-                console.log(`Histórico atualizado com sucesso. Total de ${newHistory.length} rodadas.`);
-                process.stdout.write('::set-output name=updated::true\n');
+                await fs.writeFile(HISTORY_FILE_PATH, JSON.stringify(newHistory, null, 2), 'utf8');
+                console.log(`Histórico atualizado. Total de ${newHistory.length} rodadas.`);
+                return process.stdout.write('::set-output name=updated::true\n');
 
               } catch (error) {
                 console.error('Erro durante a execução do script:', error);
@@ -89,9 +80,7 @@ jobs:
             run();
           "
 
-      # Salva as alterações (faz um "commit") de volta no seu repositório
-      # Este passo só roda se o passo anterior (update_script) disser que houve atualização
-      - name: Commit e Push das mudanças
+      - name: Commit and push changes
         if: steps.update_script.outputs.updated == 'true'
         run: |
           git config --global user.name 'GitHub Actions Bot'
