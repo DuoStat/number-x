@@ -46,7 +46,6 @@
             background-size: cover;
             background-position: center;
             background-repeat: no-repeat;
-            /* FILTRO AJUSTADO PARA MAIOR NITIDEZ */
             filter: brightness(70%);
         }
         
@@ -155,7 +154,8 @@
        class DoublePatternAnalyzer {
             MIN_OCCURRENCES_FOR_ALERT = 4;
             PATTERN_LENGTHS_TO_CHECK = [5, 4, 3, 2];
-            HISTORY_MAX_LENGTH = 480;
+            // --- VALOR JÁ ALTERADO ---
+            HISTORY_MAX_LENGTH = 600; 
             STORAGE_KEY = 'doublePatternAnalyzer_v8_fixed';
 
             constructor() {
@@ -216,30 +216,47 @@
                     }
                 }
             }
-
+            
             #runFullAnalysis() {
                 this.#rebuildAnalysisData();
+                const foundPatterns = [];
+
                 for (const length of this.PATTERN_LENGTHS_TO_CHECK) {
                     if (this.state.history.length < length) continue;
                     const recentPatternKey = this.state.history.slice(this.state.history.length - length).join(',');
                     const analysisData = this.state.analysis[recentPatternKey];
+
                     if (analysisData && analysisData.length >= this.MIN_OCCURRENCES_FOR_ALERT) {
-                        this.#displayAnalysis(recentPatternKey, analysisData);
-                        return;
+                        foundPatterns.push({ key: recentPatternKey, data: analysisData });
                     }
                 }
-                this.#hideAnalysis();
+                
+                if (foundPatterns.length > 0) {
+                    foundPatterns.sort((a, b) => b.data.length - a.data.length);
+                    const bestPattern = foundPatterns[0];
+                    this.#displayAnalysis(bestPattern.key, bestPattern.data);
+                } else {
+                    this.#hideAnalysis();
+                }
             }
             
             #displayAnalysis(patternKey, occurrences) {
                 const totalOccurrences = occurrences.length;
                 let redSuccessSG = 0, redSuccessG1 = 0;
                 let blackSuccessSG = 0, blackSuccessG1 = 0;
+                
                 occurrences.forEach(([first, second]) => {
-                    if (this.#getColorForNumber(first) === 'v') redSuccessSG++;
-                    else if (this.#getColorForNumber(second) === 'v') redSuccessG1++;
-                    if (this.#getColorForNumber(first) === 'p') blackSuccessSG++;
-                    else if (this.#getColorForNumber(second) === 'p') blackSuccessG1++;
+                    if (this.#getColorForNumber(first) === 'v') {
+                        redSuccessSG++;
+                    } else if (this.#getColorForNumber(second) === 'v') {
+                        redSuccessG1++;
+                    }
+
+                    if (this.#getColorForNumber(first) === 'p') {
+                        blackSuccessSG++;
+                    } else if (this.#getColorForNumber(second) === 'p') {
+                        blackSuccessG1++;
+                    }
                 });
 
                 const probR = totalOccurrences > 0 ? ((redSuccessSG + redSuccessG1) / totalOccurrences) * 100 : 0;
